@@ -1,0 +1,1177 @@
+<html lang="cs" class="antialiased"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CallFlow - Cold Call Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&amp;display=swap" rel="stylesheet">
+    <style>
+      body { font-family: 'Inter', sans-serif; }
+      .fade-enter { opacity: 0; transform: translateY(10px); }
+      .fade-enter-active { opacity: 1; transform: translateY(0); transition: opacity 400ms ease-out, transform 400ms ease-out; }
+    </style>
+  </head>
+  <body class="bg-zinc-950 text-zinc-300 min-h-screen flex flex-col selection:bg-emerald-500/30 overflow-x-hidden">
+    <!-- Header -->
+    <header class="border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2 text-zinc-100">
+            <iconify-icon icon="solar:phone-calling-linear" stroke-width="1.5" class="text-xl"></iconify-icon>
+            <span class="tracking-tighter font-medium text-lg uppercase">
+              Callflow
+            </span>
+          </div>
+          <div class="h-4 w-[1px] bg-zinc-800 hidden md:block"></div>
+          <span class="text-xs text-zinc-500 tracking-wide uppercase hidden md:block">
+            B2B Redesign Pitch
+          </span>
+        </div>
+
+        <div class="flex items-center gap-4 md:gap-6">
+          <button id="btn-back-top" onclick="app.stepBack()" class="text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1 text-xs disabled:opacity-30 disabled:hover:text-zinc-500" title="Krok zpět" disabled="">
+            <iconify-icon icon="solar:undo-left-linear" stroke-width="1.5" class="text-lg"></iconify-icon>
+            <span class="hidden md:inline">Krok zpět</span>
+          </button>
+          <!-- Confidence Meter -->
+          <div class="flex items-center gap-2 hidden sm:flex">
+            <span class="text-xs text-zinc-500 uppercase tracking-wider">
+              Stav:
+            </span>
+            <span id="call-status-badge" class="px-2.5 py-1 rounded-md text-xs font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/50 transition-colors">
+              Otevřeno
+            </span>
+          </div>
+
+          <button id="panic-btn" onclick="app.openPanic()" class="group relative flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3 py-1.5 rounded-full text-xs font-medium transition-colors">
+            <iconify-icon icon="solar:shield-warning-linear" stroke-width="1.5"></iconify-icon>
+            <span>Panic Mode</span>
+            <div class="absolute inset-0 rounded-full border border-rose-500/0 group-hover:border-rose-500/50 animate-ping opacity-20"></div>
+          </button>
+
+          <button onclick="app.restart()" class="text-zinc-500 hover:text-zinc-300 transition-colors" title="Restart">
+            <iconify-icon icon="solar:restart-linear" stroke-width="1.5" class="text-lg"></iconify-icon>
+          </button>
+        </div>
+      </div>
+      <!-- Progress Bar -->
+      <div class="w-full h-0.5 bg-zinc-900">
+        <div id="progress-bar" class="h-full bg-zinc-500 w-0 transition-all duration-700 ease-out"></div>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl mx-auto w-full px-4 py-6 md:py-10 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+      <!-- Left Column: Client State & Options -->
+      <div class="lg:col-span-5 flex flex-col gap-6">
+        <div class="flex flex-col gap-3 relative z-20">
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <iconify-icon icon="solar:magnifer-linear" class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"></iconify-icon>
+              <input type="text" id="search-input" placeholder="Co klient právě řekl? (např. cena, ukázka, reference...)" class="w-full bg-zinc-900/50 border border-zinc-800/60 rounded-xl py-2.5 pl-9 pr-4 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 transition-all">
+              <div id="search-results" class="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden shadow-2xl hidden flex-col max-h-60 overflow-y-auto z-50"></div>
+            </div>
+            <button onclick="app.endPolitely()" class="px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 rounded-xl text-sm font-medium text-zinc-300 transition-colors whitespace-nowrap flex items-center gap-2">
+              <iconify-icon icon="solar:call-dropped-linear" class="text-rose-400"></iconify-icon>
+              Ukončit
+            </button>
+          </div>
+        </div>
+
+        <!-- Client Current Speech Box -->
+        <div class="flex flex-col gap-3">
+          <span class="text-xs font-medium text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <iconify-icon icon="solar:user-speak-linear"></iconify-icon>
+            Klient říká
+          </span>
+
+          <div id="client-box" class="relative p-6 rounded-2xl border transition-colors duration-500 bg-zinc-900/40 border-zinc-800/50">
+            <div class="absolute top-4 right-4 flex gap-1">
+              <div id="sentiment-dot" class="w-2 h-2 rounded-full bg-zinc-600 transition-colors duration-300"></div>
+            </div>
+            <p id="client-text" class="text-lg md:text-xl font-medium tracking-tight text-zinc-200 leading-snug">
+              ...
+            </p>
+          </div>
+        </div>
+
+        <!-- Reaction Options -->
+        <div class="flex flex-col gap-3 mt-4 md:mt-8 flex-1">
+          <span class="text-xs font-medium text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <iconify-icon icon="solar:routing-2-linear"></iconify-icon>
+            Jak reaguje dál?
+          </span>
+          <div id="options-container" class="flex flex-col gap-2">
+            <!-- Options injected via JS -->
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3 mt-4 pt-4 border-t border-zinc-800/50">
+          <span class="text-xs font-medium text-amber-500/80 uppercase tracking-widest flex items-center gap-2">
+            <iconify-icon icon="solar:help-linear"></iconify-icon>
+            Rychlá záchrana
+          </span>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="app.quickPhrase('Rozumím, nebudu vás zdržovat.')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors text-left">
+              Nebudu zdržovat
+            </button>
+            <button onclick="app.quickPhrase('Ať vám neberu čas — můžu se zeptat jen na jednu věc?')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors text-left">
+              Jen jedna věc
+            </button>
+            <button onclick="app.quickPhrase('Jasně, úplně chápu. Jen abych věděl, má smysl se k tomu někdy vrátit?')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors text-left">
+              Vrátit se k tomu?
+            </button>
+            <button onclick="app.quickPhrase('Nechci vám nic tlačit, spíš mě zajímalo, jestli je to pro vás vůbec téma.')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors text-left">
+              Je to téma?
+            </button>
+            <button onclick="app.quickPhrase('Můžu vám poslat jen krátkou ukázku a podle toho uvidíte, jestli to má smysl?')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors text-left">
+              Poslat ukázku
+            </button>
+          </div>
+        </div>
+        <div id="main-branches" class="flex flex-col gap-3 mt-4 pt-4 border-t border-zinc-800/50">
+          <span class="text-xs font-medium text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <iconify-icon icon="solar:branch-linear"></iconify-icon>
+            Hlavní větve
+          </span>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="app.jumpTo('price_how_much')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Cena
+            </button>
+            <button onclick="app.jumpTo('obj_send_email')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Email
+            </button>
+            <button onclick="app.jumpTo('obj_references')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Reference
+            </button>
+            <button onclick="app.jumpTo('obj_no_time')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Nemám čas
+            </button>
+            <button onclick="app.jumpTo('obj_own_guy')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Máme svého člověka
+            </button>
+            <button onclick="app.jumpTo('what_exactly')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Co byste změnil
+            </button>
+            <button onclick="app.jumpTo('send_demo')" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Poslat demo
+            </button>
+            <button onclick="app.endPolitely()" class="px-3 py-1.5 bg-zinc-900/50 border border-zinc-800 hover:border-rose-500/30 hover:bg-zinc-800 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 transition-colors">
+              Ukončit slušně
+            </button>
+          </div>
+        </div>
+
+        <div id="call-notes" class="flex flex-col gap-3 mt-4 pt-4 border-t border-zinc-800/50">
+          <span class="text-xs font-medium text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <iconify-icon icon="solar:pen-new-square-linear"></iconify-icon>
+            Poznámky z hovoru
+          </span>
+          <textarea id="notes-input" rows="5" placeholder="Jméno, email, čas follow-upu, námitka, další krok…" class="w-full bg-zinc-900/50 border border-zinc-800/60 rounded-xl p-3 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 transition-all resize-y"></textarea>
+        </div>
+      </div>
+
+      <!-- Right Column: My Script & Coaching -->
+      <div class="lg:col-span-7 flex flex-col gap-6">
+        <!-- My Script Box -->
+        <div class="flex flex-col gap-3">
+          <span class="text-xs font-medium text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+            <iconify-icon icon="solar:microphone-2-linear"></iconify-icon>
+            Co mám říct já
+          </span>
+
+          <div class="relative p-6 md:p-8 rounded-2xl bg-zinc-900/80 border border-zinc-800/80 shadow-2xl overflow-hidden group">
+            <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div id="me-text" class="relative text-base md:text-lg font-normal text-zinc-100 whitespace-pre-wrap leading-relaxed tracking-wide">
+              ...
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Coach Tips -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+          <div class="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/40 flex flex-col gap-2">
+            <div class="flex items-center gap-2 text-zinc-400">
+              <iconify-icon icon="solar:target-linear" class="text-indigo-400"></iconify-icon>
+              <span class="text-xs font-medium uppercase tracking-wider">
+                Cíl
+              </span>
+            </div>
+            <p id="tip-goal" class="text-sm text-zinc-300 font-normal">...</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/40 flex flex-col gap-2">
+            <div class="flex items-center gap-2 text-zinc-400">
+              <iconify-icon icon="solar:music-note-linear" class="text-sky-400"></iconify-icon>
+              <span class="text-xs font-medium uppercase tracking-wider">
+                Tón hlasu
+              </span>
+            </div>
+            <p id="tip-tone" class="text-sm text-zinc-300 font-normal">...</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex flex-col gap-2">
+            <div class="flex items-center gap-2 text-zinc-400">
+              <iconify-icon icon="solar:lightbulb-minimalistic-linear" class="text-emerald-400"></iconify-icon>
+              <span class="text-xs font-medium uppercase tracking-wider text-emerald-500/80">
+                Proč to funguje
+              </span>
+            </div>
+            <p id="tip-why" class="text-sm text-emerald-100/80 font-normal">
+              ...
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 flex flex-col gap-2">
+            <div class="flex items-center gap-2 text-zinc-400">
+              <iconify-icon icon="solar:close-circle-linear" class="text-rose-400"></iconify-icon>
+              <span class="text-xs font-medium uppercase tracking-wider text-rose-500/80">
+                Čeho se vyvarovat
+              </span>
+            </div>
+            <p id="tip-avoid" class="text-sm text-rose-100/80 font-normal">
+              ...
+            </p>
+          </div>
+        </div>
+        <div class="flex flex-col gap-3 mt-4 pt-4 border-t border-zinc-800/50">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+              <iconify-icon icon="solar:history-linear"></iconify-icon>
+              Historie hovoru
+            </span>
+            <button onclick="app.stepBack()" id="btn-back" class="text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-30 disabled:hover:text-zinc-400 transition-colors flex items-center gap-1">
+              <iconify-icon icon="solar:undo-left-linear"></iconify-icon>
+              Krok zpět
+            </button>
+          </div>
+          <div id="history-container" class="flex flex-col gap-2 max-h-32 overflow-y-auto pr-2"></div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const tree = {
+          start: {
+              tags: ["start", "úvod"],
+              status: "Otevřeno",
+              client_text: "(Zvedá telefon) Prosím, tady [Jméno klienta].",
+              sentiment: "neutral",
+              me_text: "Dobrý den, tady Samuel.\n\nDíval jsem se na váš web a vzhledem k tomu, jak kvalitně firma působí, mi přišlo, že by si zasloužil modernější prezentaci.\n\nTak jsem se chtěl jen zeptat, jestli jste někdy přemýšleli nad redesignem nebo modernizací webu.",
+              tips: {
+                  goal: "Otevřít konverzaci, složit upřímnou poklonu a vytvořit kontrast s webem.",
+                  tone: "Klidný, respektující. Mírně pomalejší tempo.",
+                  why: "Kritizujete web, ne firmu. Otázka na konci je nezávazná.",
+                  avoid: "Neptejte se 'Máte chvilku?'. Neříkejte 'Váš web je špatný'."
+              },
+              options: [
+                  { id: "who_are_you", text: "Kdo jste? Odkud voláte?", type: "yellow" },
+                  { id: "interest_yes", text: "Ano, přemýšleli jsme o tom.", type: "green" },
+                  { id: "reject_no", text: "Ne, nechceme nic měnit.", type: "red" },
+                  { id: "obj_own_guy", text: "Máme na to svého člověka.", type: "yellow" },
+                  { id: "obj_send_email", text: "Pošlete mi to do mailu.", type: "yellow" },
+                  { id: "call_later", text: "Zavolejte později.", type: "yellow" },
+                  { id: "price_how_much", text: "A kolik by to stálo?", type: "yellow" },
+                  { id: "obj_references", text: "A máte nějaké reference?", type: "yellow" },
+                  { id: "obj_secretary", text: "Já jsem jen asistentka / jednatel tu není.", type: "neutral" },
+                  { id: "aggr_busy", text: "Nemám čas.", type: "red" }
+              ]
+          },
+
+          who_are_you: {
+              tags: ["kdo jste", "odkud voláte", "představení"],
+              status: "Otevřeno",
+              client_text: "Kdo jste? Odkud voláte?",
+              sentiment: "neutral",
+              me_text: "Jasně, rozumím. Jmenuju se Samuel a pomáhám firmám s modernější prezentací na webu. Našel jsem vás přes váš web a přišlo mi, že firma působí kvalitně, ale web by mohl působit moderněji. Nechci vás zdržovat — můžu říct jednou větou, proč volám?",
+              tips: {
+                  goal: "Rychle vyjasnit kontext a získat souhlas pokračovat jednou větou.",
+                  tone: "Klidný, stručný, sebejistý.",
+                  why: "Lidé často chtějí jen vědět, kdo jste. Souhlas 'jednou větou' sníží odpor.",
+                  avoid: "Neomlouvejte se zbytečně a nezačínejte hned prodávat."
+              },
+              options: [
+                  { id: "interest_yes", text: "Tak řekněte.", type: "green" },
+                  { id: "reject_end", text: "Nemám zájem.", type: "red" },
+                  { id: "obj_send_email", text: "Pošlete email.", type: "yellow" },
+                  { id: "where_number", text: "Kde jste vzal číslo?", type: "yellow" }
+              ]
+          },
+
+          where_number: {
+              tags: ["kde jste vzal číslo", "zdroj kontaktu", "číslo"],
+              status: "Námitka",
+              client_text: "Kde jste vzal číslo?",
+              sentiment: "yellow",
+              me_text: "Číslo jsem našel veřejně na vašem webu v kontaktech. Nevolám kvůli žádné databázi, jen jsem se díval přímo na váš web a napadlo mě, že by dávalo smysl se zeptat.",
+              tips: {
+                  goal: "Uklidnit obavu z databází a udržet důvěru.",
+                  tone: "Faktický, klidný.",
+                  why: "Transparentnost snižuje obranu.",
+                  avoid: "Nevysvětlujte to moc dlouze."
+              },
+              options: [
+                  { id: "interest_yes", text: "Dobře, pokračujte.", type: "green" },
+                  { id: "reject_end", text: "Nezájem.", type: "red" },
+                  { id: "obj_send_email", text: "Pošlete mi to do mailu.", type: "yellow" }
+              ]
+          },
+
+          call_later: {
+              tags: ["zavolejte později", "později", "jiný čas"],
+              status: "Follow-up",
+              client_text: "Zavolejte později.",
+              sentiment: "yellow",
+              me_text: "Jasně. Kdy je pro vás lepší čas — spíš dopoledne, nebo odpoledne?",
+              tips: {
+                  goal: "Zkonkretizovat 'později' na jasný rámec.",
+                  tone: "Praktický, krátký.",
+                  why: "Bez upřesnění se 'později' často nestane.",
+                  avoid: "Netlačte na přesný čas, když klient spěchá."
+              },
+              options: [
+                  { id: "call_later_tomorrow_morning", text: "Zítra dopoledne.", type: "green" },
+                  { id: "call_later_next_week", text: "Příští týden.", type: "yellow" },
+                  { id: "obj_send_email", text: "Pošlete radši email.", type: "yellow" }
+              ]
+          },
+
+          call_later_tomorrow_morning: {
+              tags: ["zavolat zítra", "dopoledne", "follow-up"],
+              status: "Follow-up",
+              client_text: "Zítra dopoledne.",
+              sentiment: "green",
+              me_text: "Super, děkuju. Zavolám vám zítra dopoledne. A jen ať si to poznamenám — je lepší volat spíš kolem 9, nebo až kolem 11?",
+              tips: {
+                  goal: "Upřesnit okno a zapsat follow-up.",
+                  tone: "Rychlý, organizovaný.",
+                  why: "Konkrétnější domluva zvýší šanci.",
+                  avoid: "Neprodlužujte to, pokud klient spěchá."
+              },
+              options: [
+                  { id: "reject_end", text: "Nechte to být.", type: "red" },
+                  { id: "start", text: "[Zapsat do poznámek a ukončit]", type: "green" }
+              ]
+          },
+
+          call_later_next_week: {
+              tags: ["příští týden", "follow-up"],
+              status: "Follow-up",
+              client_text: "Příští týden.",
+              sentiment: "yellow",
+              me_text: "Rozumím. Je pro vás lepší začátek týdne, nebo spíš ke konci?",
+              tips: {
+                  goal: "Získat konkrétnější termín.",
+                  tone: "Praktický.",
+                  why: "Bez konkrétního rámce follow-up často spadne.",
+                  avoid: "Netlačte, když klient nechce termíny řešit."
+              },
+              options: [
+                  { id: "start", text: "[Zapsat do poznámek a ukončit]", type: "green" },
+                  { id: "obj_send_email", text: "Pošlete radši email.", type: "yellow" }
+              ]
+          },
+
+          interest_yes: {
+              tags: ["zájem", "ano", "přemýšleli jsme"],
+              status: "Zájem",
+              client_text: "Ano, přemýšleli jsme o tom.",
+              sentiment: "green",
+              me_text: "Super. Abych vám neříkal obecné věci — co je dneska na webu největší brzda? Je to spíš vzhled, přehlednost, nebo že nepřináší tolik poptávek, kolik by mohl?",
+              tips: {
+                  goal: "Získat konkrétní problém a navést na další krok (ukázka / krátký audit).",
+                  tone: "Zvědavý, věcný, klidný.",
+                  why: "Když klient řekne důvod, sám si potvrzuje potřebu změny.",
+                  avoid: "Neslibujte výsledky dřív, než víte kontext."
+              },
+              options: [
+                  { id: "what_exactly", text: "Co byste konkrétně změnil?", type: "green" },
+                  { id: "send_demo", text: "Můžete mi poslat ukázku?", type: "yellow" },
+                  { id: "price_after_demo", text: "A kolik to přibližně stojí?", type: "yellow" },
+                  { id: "we_are_full", text: "Máme plno zakázek.", type: "yellow" },
+                  { id: "reject_works_fine", text: "Teď to necháme, funguje to.", type: "yellow" },
+                  { id: "aggr_busy", text: "Nemám teď čas.", type: "red" }
+              ]
+          },
+
+          what_exactly: {
+              tags: ["co přesně", "co byste změnil", "konkrétně"],
+              status: "Zájem",
+              client_text: "Co byste konkrétně změnil?",
+              sentiment: "green",
+              me_text: "Jasně. Bez detailu je fér říct, že nejčastěji to bývá:\n1) první dojem a důvěryhodnost,\n2) jasná nabídka a pro koho to je,\n3) přehledná cesta k poptávce.\n\nKdyž mi řeknete obor a jaké zakázky chcete víc, řeknu vám dvě konkrétní věci, které by dávaly největší smysl právě u vás.",
+              tips: {
+                  goal: "Udržet konverzaci konkrétní a nabídnout rychlou hodnotu.",
+                  tone: "Jistý, stručný, praktický.",
+                  why: "Dáváte rámec a zároveň si vyžádáte minimum informací.",
+                  avoid: "Nedávejte deset bodů — stačí 2–3."
+              },
+              options: [
+                  { id: "send_demo", text: "Pošlete mi ukázku / návrh.", type: "green" },
+                  { id: "price_how_much", text: "Dobře, a cena?", type: "yellow" },
+                  { id: "obj_send_email", text: "Pošlete mi to do mailu.", type: "yellow" },
+                  { id: "call_later", text: "Zavolejte později.", type: "yellow" }
+              ]
+          },
+
+          send_demo: {
+              tags: ["ukázka", "demo", "návrh", "pošlete"],
+              status: "Zájem",
+              client_text: "Pošlete mi ukázku.",
+              sentiment: "green",
+              me_text: "Určitě. Aby to mělo hlavu a patu — kam vám to mám poslat? Je lepší osobní email, nebo třeba info@?",
+              tips: {
+                  goal: "Získat email a udržet další krok jednoduchý.",
+                  tone: "Praktický, přátelský.",
+                  why: "Dáváte klientovi dvě snadné volby.",
+                  avoid: "Nedělejte z toho 'prezentaci'. Nabídněte krátkou ukázku."
+              },
+              options: [
+                  { id: "demo_personal_email", text: "Pošlete na můj osobní email.", type: "green" },
+                  { id: "demo_info_email", text: "Pošlete to na info@.", type: "yellow" },
+                  { id: "obj_send_email", text: "Radši mi to jen napište emailem.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, nechci nic posílat.", type: "red" }
+              ]
+          },
+
+          demo_personal_email: {
+              tags: ["osobní email", "poslat ukázku", "email"],
+              status: "Follow-up",
+              client_text: "Pošlete to na můj osobní email.",
+              sentiment: "green",
+              me_text: "Super, nadiktujete mi ho prosím?\n\nA jen ať to nepošlu naslepo — pošlu krátkou ukázku a dva konkrétní postřehy k vašemu webu. Můžu vám pak zítra nebo pozítří na 5 minut zavolat, jestli to dává smysl?",
+              tips: {
+                  goal: "Získat email + domluvit mini follow-up.",
+                  tone: "Organizovaný, lehce uzavírající.",
+                  why: "Email bez follow-upu často skončí bez reakce.",
+                  avoid: "Netlačte na dlouhý call."
+              },
+              options: [
+                  { id: "call_later_tomorrow_morning", text: "Zavolejte zítra dopoledne.", type: "green" },
+                  { id: "call_later", text: "Zavolejte později.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, už mi nevolejte.", type: "red" },
+                  { id: "start", text: "[Zapsat do poznámek a ukončit]", type: "green" }
+              ]
+          },
+
+          demo_info_email: {
+              tags: ["info email", "info@", "poslat ukázku"],
+              status: "Follow-up",
+              client_text: "Pošlete to na info@.",
+              sentiment: "yellow",
+              me_text: "Jasně, pošlu to na info@. Aby se to neztratilo — komu to mám v předmětu adresovat? A můžu si rovnou poznamenat, kdy se vám k tomu mám připomenout?",
+              tips: {
+                  goal: "Snížit šanci, že se email ztratí, a získat follow-up.",
+                  tone: "Krátký, věcný.",
+                  why: "Konkrétní jméno a follow-up zvýší odpověď.",
+                  avoid: "Nenuťte je do přesného času, když nemají prostor."
+              },
+              options: [
+                  { id: "call_later", text: "Připomeňte se později.", type: "green" },
+                  { id: "secretary_gives_email", text: "Napište to na info@, jméno není třeba.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, děkuju.", type: "red" },
+                  { id: "start", text: "[Zapsat do poznámek a ukončit]", type: "green" }
+              ]
+          },
+
+          price_how_much: {
+              tags: ["cena", "kolik stojí", "kolik"],
+              status: "Cena",
+              client_text: "A kolik by to stálo?",
+              sentiment: "yellow",
+              me_text: "Záleží na rozsahu — jestli je to jen vizuál, nebo i struktura, texty a třeba i jednoduché konverzní prvky.\n\nAbych vám neplácl číslo od boku: můžu vám poslat krátkou ukázku a orientační rozpětí na základě toho, co uvidím na webu?",
+              tips: {
+                  goal: "Nedat náhodnou cenu, ale posunout to k ukázce a rámcovému rozpětí.",
+                  tone: "Klidný, férový.",
+                  why: "Cena bez kontextu vyvolá odpor. Ukázka dává hodnotu.",
+                  avoid: "Neslibujte nejnižší cenu, nesnižujte hodnotu."
+              },
+              options: [
+                  { id: "price_after_demo", text: "Dobře, dejte mi rozpětí.", type: "green" },
+                  { id: "send_demo", text: "Pošlete ukázku.", type: "yellow" },
+                  { id: "price_budget_low", text: "Máme na to malý rozpočet.", type: "yellow" },
+                  { id: "reject_end", text: "Nechci to řešit.", type: "red" }
+              ]
+          },
+
+          price_after_demo: {
+              tags: ["rozpětí", "cena po ukázce", "kolik to vyjde"],
+              status: "Cena",
+              client_text: "Dobře, tak jaké je rozpětí?",
+              sentiment: "yellow",
+              me_text: "Orientačně: menší redesign se často vejde do nižších desítek tisíc, větší projekt s texty a strukturou spíš výš — ale fakt záleží na rozsahu.\n\nNechci vás tahat za nos. Když vám pošlu ukázku a 2–3 konkrétní body, které by u vás dávaly smysl, můžeme se pak bavit už o přesnějším odhadu. Je to ok?",
+              tips: {
+                  goal: "Dát rámec bez přestřelení a ukotvit další krok.",
+                  tone: "Férový, jistý.",
+                  why: "Rámec snižuje nejistotu, ukázka zvýší důvěru.",
+                  avoid: "Neslibujte pevnou cenu bez zadání."
+              },
+              options: [
+                  { id: "price_ok", text: "To zní ok.", type: "green" },
+                  { id: "price_too_high", text: "To je moc.", type: "red" },
+                  { id: "price_what_included", text: "Co v tom je zahrnuté?", type: "yellow" },
+                  { id: "send_demo", text: "Pošlete ukázku.", type: "yellow" }
+              ]
+          },
+
+          price_ok: {
+              tags: ["cena ok", "zní dobře"],
+              status: "Zájem",
+              client_text: "To zní v pohodě.",
+              sentiment: "green",
+              me_text: "Super. Abychom to zbytečně nenatahovali — pošlu vám krátkou ukázku a 2–3 konkrétní návrhy pro váš web.\n\nKam to mám poslat?",
+              tips: {
+                  goal: "Získat email a posunout na ukázku.",
+                  tone: "Krátký, uzavírající.",
+                  why: "Když je cena ok, je nejlepší rychle ukotvit další krok.",
+                  avoid: "Neotevírejte znovu cenu bez důvodu."
+              },
+              options: [
+                  { id: "demo_personal_email", text: "Pošlu vám osobní email.", type: "green" },
+                  { id: "demo_info_email", text: "Pošlete to na info@.", type: "yellow" },
+                  { id: "call_later", text: "Zavolejte později.", type: "yellow" }
+              ]
+          },
+
+          price_too_high: {
+              tags: ["moc drahé", "to je moc", "vysoká cena"],
+              status: "Námitka",
+              client_text: "To je moc.",
+              sentiment: "red",
+              me_text: "Rozumím. Jen ať vím, jestli je to mimo úplně, nebo jen mimo aktuální rozpočet — jaké rozpětí by pro vás bylo realistické?",
+              tips: {
+                  goal: "Zjistit rozpočet a zvolit menší rozsah / jiný krok.",
+                  tone: "Klidný, bez obrany.",
+                  why: "Když zjistíte rámec, můžete upravit rozsah.",
+                  avoid: "Nezlevňujte okamžitě bez pochopení rozsahu."
+              },
+              options: [
+                  { id: "price_budget_low", text: "Máme menší rozpočet.", type: "yellow" },
+                  { id: "send_demo", text: "Pošlete ukázku, uvidíme.", type: "green" },
+                  { id: "reject_end", text: "Ne, nechceme to.", type: "red" }
+              ]
+          },
+
+          price_budget_low: {
+              tags: ["malý rozpočet", "budget", "levně"],
+              status: "Námitka",
+              client_text: "Máme na to malý rozpočet.",
+              sentiment: "yellow",
+              me_text: "Chápu. V tom případě dává smysl jít po největších rychlých dopadech — třeba upravit první dojem a jasnost nabídky, bez velkého vývoje.\n\nMůžu vám poslat krátkou ukázku a návrh menšího rozsahu, ať vidíte, jestli to dává smysl?",
+              tips: {
+                  goal: "Přizpůsobit rozsah rozpočtu a udržet šanci.",
+                  tone: "Praktický, řešení-orientovaný.",
+                  why: "Klient nechce platit za 'všechno'. Nabídněte menší balíček.",
+                  avoid: "Nesnižujte se větou 'udělám to levně'."
+              },
+              options: [
+                  { id: "send_demo", text: "Pošlete ukázku / návrh.", type: "green" },
+                  { id: "obj_send_email", text: "Pošlete to do mailu.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, díky.", type: "red" }
+              ]
+          },
+
+          price_what_included: {
+              tags: ["co je v ceně", "co zahrnuje", "included"],
+              status: "Cena",
+              client_text: "Co v tom je zahrnuté?",
+              sentiment: "yellow",
+              me_text: "Typicky: návrh struktury (co má být kde), design, základní úprava textů pro jasnější nabídku, a příprava tak, aby se web dal bez problémů nasadit. Rozsah se dá zvolit menší i větší.\n\nAbych vám řekl přesněji, pošlu krátkou ukázku a navrhnu rozsah. Je to ok?",
+              tips: {
+                  goal: "Vysvětlit hodnotu a vrátit se k ukázce.",
+                  tone: "Jasný, bez omáčky.",
+                  why: "Lidé často neví, co kupují. Stručný seznam uklidní.",
+                  avoid: "Nechoďte do technických detailů."
+              },
+              options: [
+                  { id: "send_demo", text: "OK, pošlete ukázku.", type: "green" },
+                  { id: "price_too_high", text: "Stejně je to moc.", type: "red" },
+                  { id: "call_later", text: "Zavolejte později.", type: "yellow" }
+              ]
+          },
+
+          obj_references: {
+              tags: ["reference", "ukázky", "portfolio"],
+              status: "Námitka",
+              client_text: "A máte nějaké reference?",
+              sentiment: "yellow",
+              me_text: "Ano, mám ukázky projektů a taky pár krátkých případových studií. Nechci vás zdržovat po telefonu — pošlu vám 2–3 relevantní ukázky podle vašeho oboru.\n\nKam to mám poslat?",
+              tips: {
+                  goal: "Dodat důvěru a získat email.",
+                  tone: "Jistý, stručný.",
+                  why: "Reference jsou nejlepší v textu/odkazu, ne po telefonu.",
+                  avoid: "Neslibujte 'velká jména', pokud je nemáte."
+              },
+              options: [
+                  { id: "demo_personal_email", text: "Pošlete na osobní email.", type: "green" },
+                  { id: "demo_info_email", text: "Pošlete na info@.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, děkuju.", type: "red" }
+              ]
+          },
+
+          obj_own_guy: {
+              tags: ["máme svého člověka", "interně", "dodavatel"],
+              status: "Námitka",
+              client_text: "Máme na to svého člověka.",
+              sentiment: "yellow",
+              me_text: "Rozumím — to je ideální. Jen ať vás zbytečně netlačím: je to někdo interní, nebo externí dodavatel? A je to teď aktivní téma, nebo spíš 'až někdy'?",
+              tips: {
+                  goal: "Zjistit situaci a najít prostor (audit, konzultace, druhý názor).",
+                  tone: "Respektující, nenapadající.",
+                  why: "Když uznáte jejich řešení, snížíte obranu.",
+                  avoid: "Nezpochybňujte jejich člověka."
+              },
+              options: [
+                  { id: "obj_how_long", text: "Máme ho už dlouho.", type: "yellow" },
+                  { id: "obj_no_time", text: "Teď to neřešíme.", type: "yellow" },
+                  { id: "send_demo", text: "Pošlete ukázku, porovnáme.", type: "green" },
+                  { id: "reject_end", text: "Nezájem.", type: "red" }
+              ]
+          },
+
+          obj_how_long: {
+              tags: ["jak dlouho", "máme dlouho", "dodavatel"],
+              status: "Námitka",
+              client_text: "Máme ho už dlouho.",
+              sentiment: "yellow",
+              me_text: "Jasně. V tom případě se nechci míchat — spíš nabízím druhý názor.\n\nMůžu vám poslat krátkou ukázku a 2 konkrétní postřehy, které by mohly zlepšit dojem/konverze, a když to bude dávat smysl, proberete to s vaším člověkem?",
+              tips: {
+                  goal: "Nabídnout bezpečný další krok bez konfliktu s jejich dodavatelem.",
+                  tone: "Pokorný, praktický.",
+                  why: "Druhý názor je nízká bariéra.",
+                  avoid: "Nevytvářejte tlak na změnu dodavatele."
+              },
+              options: [
+                  { id: "send_demo", text: "Pošlete ukázku.", type: "green" },
+                  { id: "obj_send_email", text: "Pošlete to do mailu.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, díky.", type: "red" }
+              ]
+          },
+
+          obj_no_time: {
+              tags: ["neřešíme", "teď ne", "není čas"],
+              status: "Námitka",
+              client_text: "Teď to neřešíme.",
+              sentiment: "yellow",
+              me_text: "Rozumím. Abych vás netrápil: mám vám poslat jen krátkou ukázku a připomenout se třeba za měsíc? Nebo je lepší nechat to úplně být?",
+              tips: {
+                  goal: "Získat souhlas na follow-up nebo ukončit bez tření.",
+                  tone: "Respektující, stručný.",
+                  why: "Dáte jim kontrolu — snížíte odpor.",
+                  avoid: "Nesnažte se to za každou cenu otočit."
+              },
+              options: [
+                  { id: "send_demo", text: "Pošlete ukázku.", type: "green" },
+                  { id: "call_later_next_week", text: "Ozvěte se později.", type: "yellow" },
+                  { id: "reject_end", text: "Nechte to být.", type: "red" }
+              ]
+          },
+
+          obj_send_email: {
+              tags: ["pošlete email", "do mailu", "email"],
+              status: "Follow-up",
+              client_text: "Pošlete mi to do mailu.",
+              sentiment: "yellow",
+              me_text: "Jasně. Aby to nebyl generický email — pošlu krátkou ukázku a 2 konkrétní návrhy k vašemu webu.\n\nNa jaký email to mám poslat?",
+              tips: {
+                  goal: "Získat email a zvýšit šanci, že se tím budou zabývat.",
+                  tone: "Krátký, věcný.",
+                  why: "'Konkrétní návrhy' zvyšují hodnotu.",
+                  avoid: "Nepošlete jen obecný leták."
+              },
+              options: [
+                  { id: "demo_personal_email", text: "Pošlu vám osobní email.", type: "green" },
+                  { id: "demo_info_email", text: "Pošlete to na info@.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, děkuju.", type: "red" }
+              ]
+          },
+
+          obj_secretary: {
+              tags: ["asistentka", "sekretářka", "jednatel tu není"],
+              status: "Námitka",
+              client_text: "Já jsem jen asistentka / jednatel tu není.",
+              sentiment: "neutral",
+              me_text: "Jasně, děkuju. Nechci vás zatěžovat — komu se prosím ohledně webu vyplatí napsat? Stačí email a já pošlu krátkou ukázku a pak se ozvu ve vhodný čas.",
+              tips: {
+                  goal: "Získat správný kontakt nebo aspoň email.",
+                  tone: "Zdvořilý, stručný.",
+                  why: "Asistentka často pomůže, když je to jednoduché.",
+                  avoid: "Netlačte na přepojení."
+              },
+              options: [
+                  { id: "secretary_gives_email", text: "Můžu vám dát email.", type: "green" },
+                  { id: "call_later", text: "Zavolejte jindy.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, nic neposílejte.", type: "red" }
+              ]
+          },
+
+          secretary_gives_email: {
+              tags: ["asistentka dá email", "kontakt"],
+              status: "Follow-up",
+              client_text: "Můžu vám dát email.",
+              sentiment: "green",
+              me_text: "Děkuju, to mi moc pomůže. Nadiktujete mi ho prosím?\n\nA jen ať to nezapadne — kdy je nejlepší se připomenout, aby si to jednatel mohl v klidu projít?",
+              tips: {
+                  goal: "Získat email + čas follow-upu.",
+                  tone: "Vděčný, krátký.",
+                  why: "Follow-up zvyšuje šanci, že se to dostane ke správné osobě.",
+                  avoid: "Nechtějte hned dlouhou schůzku."
+              },
+              options: [
+                  { id: "call_later", text: "Domluvit připomenutí.", type: "green" },
+                  { id: "start", text: "[Zapsat do poznámek a ukončit]", type: "green" },
+                  { id: "reject_end", text: "Nechte to být.", type: "red" }
+              ]
+          },
+
+          reject_no: {
+              tags: ["ne", "nechceme", "odmítnutí"],
+              status: "Ztraceno",
+              client_text: "Ne, nechceme nic měnit.",
+              sentiment: "red",
+              me_text: "Rozumím. Jen poslední otázka, ať se zbytečně neozývám — je to proto, že web funguje dobře, nebo protože to teď není priorita?",
+              tips: {
+                  goal: "Získat důvod odmítnutí a případně otevřít malé okno.",
+                  tone: "Respektující, klidný.",
+                  why: "Jedna otázka může odhalit 'ne teď' místo 'nikdy'.",
+                  avoid: "Neobhajujte se, neargumentujte dlouze."
+              },
+              options: [
+                  { id: "reject_works_fine", text: "Funguje to dobře.", type: "yellow" },
+                  { id: "obj_no_time", text: "Teď to není priorita.", type: "yellow" },
+                  { id: "reject_end", text: "Prostě ne.", type: "red" }
+              ]
+          },
+
+          reject_works_fine: {
+              tags: ["funguje", "jsme spokojení", "v pohodě"],
+              status: "Ztraceno",
+              client_text: "Web funguje dobře.",
+              sentiment: "yellow",
+              me_text: "To rád slyším. V tom případě vás nebudu přemlouvat.\n\nKdyby se to někdy změnilo, můžu vám poslat aspoň jednu krátkou ukázku, jak by se dal zlepšit první dojem? Pokud ne, úplně v pohodě.",
+              tips: {
+                  goal: "Nechat otevřené dveře s minimálním tlakem.",
+                  tone: "Respektující, lehký.",
+                  why: "Nízká nabídka (1 ukázka) může projít i přes 'funguje to'.",
+                  avoid: "Neříkejte, že se pletou."
+              },
+              options: [
+                  { id: "send_demo", text: "Pošlete jednu ukázku.", type: "green" },
+                  { id: "reject_end", text: "Ne, děkuju.", type: "red" }
+              ]
+          },
+
+          aggr_busy: {
+              tags: ["nemám čas", "spěchám", "busy"],
+              status: "Námitka",
+              client_text: "Nemám čas.",
+              sentiment: "red",
+              me_text: "Rozumím. Jen poslední věta — můžu vám poslat krátkou ukázku do mailu a když to bude dávat smysl, ozvu se jindy?",
+              tips: {
+                  goal: "Udržet šanci jedním krokem bez zdržování.",
+                  tone: "Velmi stručný, respektující.",
+                  why: "Email je nejmenší možný závazek.",
+                  avoid: "Nechte to na jednu větu."
+              },
+              options: [
+                  { id: "obj_send_email", text: "Pošlete email.", type: "green" },
+                  { id: "call_later", text: "Zavolejte později.", type: "yellow" },
+                  { id: "reject_end", text: "Ne, už nevolejte.", type: "red" }
+              ]
+          },
+
+          reject_end: {
+              tags: ["konec", "nezájem", "ukončit"],
+              status: "Ztraceno",
+              client_text: "Nemám zájem.",
+              sentiment: "red",
+              me_text: "Rozumím, nebudu vás dál zdržovat. Díky za váš čas a ať se daří. Na slyšenou.",
+              tips: {
+                  goal: "Ukončit hovor slušně a rychle.",
+                  tone: "Krátký, profesionální.",
+                  why: "Důstojné ukončení zanechá lepší dojem.",
+                  avoid: "Nehádejte se a netlačte."
+              },
+              options: [
+                  { id: "start", text: "[Nový hovor / restart]", type: "green" }
+              ]
+          }
+      };
+
+      tree.we_are_full = {
+          tags: ["máme plno", "dost zakázek", "nepotřebujeme poptávky"],
+          status: "Námitka",
+          client_text: "Máme práce dost, nepotřebujeme víc poptávek.",
+          sentiment: "yellow",
+          me_text: "To je vlastně skvělá pozice. V tom případě by nový web nemusel být o tom mít víc poptávek za každou cenu, ale spíš o tom působit líp na lepší typ zákazníků. Ale pokud to teď není téma, chápu to.",
+          tips: {
+              goal: "Přerámovat cíl a nechat otevřené dveře.",
+              tone: "Respektující, uznávající.",
+              why: "Uznání situace sníží odpor a umožní mluvit o kvalitě.",
+              avoid: "Nesnažte se je přesvědčit, že nemají plno."
+          },
+          options: [
+              { id: "send_demo", text: "To dává smysl.", type: "green" },
+              { id: "reject_end", text: "Ne, fakt to nechceme.", type: "red" },
+              { id: "send_demo", text: "Pošlete ukázku.", type: "yellow" }
+          ]
+      };
+
+      // inject option into interest_yes if exists
+      if (tree.interest_yes && tree.interest_yes.options && !tree.interest_yes.options.some(o => o.id === 'we_are_full')) {
+          tree.interest_yes.options.push({ id: 'we_are_full', text: 'Máme plno zakázek.', type: 'yellow' });
+      }
+
+      const state = {
+          history: [],
+          currentNode: 'start',
+          callDepth: 0,
+          notes: ''
+      };
+
+      const colors = {
+          green: { text: 'text-emerald-400', bg: 'bg-emerald-500', boxBg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
+          yellow: { text: 'text-amber-400', bg: 'bg-amber-500', boxBg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+          red: { text: 'text-rose-400', bg: 'bg-rose-500', boxBg: 'bg-rose-500/10', border: 'border-rose-500/30' },
+          neutral: { text: 'text-zinc-300', bg: 'bg-zinc-500', boxBg: 'bg-zinc-900/40', border: 'border-zinc-800/50' }
+      };
+
+      const statusColors = {
+          "Otevřeno": "text-sky-300 bg-sky-500/10 border-sky-500/30",
+          "Zájem": "text-emerald-300 bg-emerald-500/10 border-emerald-500/30",
+          "Námitka": "text-amber-300 bg-amber-500/10 border-amber-500/30",
+          "Cena": "text-indigo-300 bg-indigo-500/10 border-indigo-500/30",
+          "Follow-up": "text-fuchsia-300 bg-fuchsia-500/10 border-fuchsia-500/30",
+          "Ztraceno": "text-rose-300 bg-rose-500/10 border-rose-500/30",
+          "Uzavřeno": "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+      };
+
+      const app = {
+          init() {
+              this.setupSearch();
+              this.setupNotes();
+              this.render(state.currentNode, { adjustProgress: true, renderHistory: true });
+          },
+
+          setupNotes() {
+              const notes = document.getElementById('notes-input');
+              if (!notes) return;
+              notes.value = state.notes || '';
+              notes.addEventListener('input', (e) => {
+                  state.notes = e.target.value;
+              });
+          },
+
+          setupSearch() {
+              const input = document.getElementById('search-input');
+              const results = document.getElementById('search-results');
+              if(!input || !results) return;
+
+              input.addEventListener('input', (e) => {
+                  const val = e.target.value.toLowerCase();
+                  if (!val) {
+                      results.classList.add('hidden');
+                      return;
+                  }
+
+                  const matches = Object.entries(tree).filter(([id, node]) => {
+                      if (id === 'start') return false;
+                      const tagsMatch = node.tags && node.tags.some(tag => tag.toLowerCase().includes(val));
+                      const textMatch = (node.client_text || '').toLowerCase().includes(val);
+                      return tagsMatch || textMatch;
+                  });
+
+                  if (matches.length > 0) {
+                      results.innerHTML = matches.map(([id, node]) => `
+                          <button class="w-full text-left px-4 py-3 hover:bg-zinc-700/50 text-sm text-zinc-300 border-b border-zinc-700/50 last:border-0 transition-colors" onclick="app.jumpTo('${id}')">
+                              <div class="font-medium text-emerald-400/80 mb-0.5">${node.tags ? node.tags.join(', ') : ''}</div>
+                              <div class="truncate">${node.client_text}</div>
+                          </button>
+                      `).join('');
+                      results.classList.remove('hidden');
+                  } else {
+                      results.innerHTML = '<div class="px-4 py-3 text-sm text-zinc-500">Nenalezeno...</div>';
+                      results.classList.remove('hidden');
+                  }
+              });
+
+              document.addEventListener('click', (e) => {
+                  if (!input.contains(e.target) && !results.contains(e.target)) {
+                      results.classList.add('hidden');
+                  }
+              });
+          },
+
+          openPanic() {
+              const modal = document.getElementById('panic-modal');
+              if (!modal) return;
+              modal.classList.remove('hidden');
+          },
+
+          closePanic() {
+              const modal = document.getElementById('panic-modal');
+              if (!modal) return;
+              modal.classList.add('hidden');
+          },
+
+          usePanicPhrase(phrase) {
+              this.quickPhrase(phrase);
+              this.closePanic();
+          },
+
+          updateProgress() {
+              const bar = document.getElementById('progress-bar');
+              if (!bar) return;
+              bar.style.width = `${Math.min(100, state.callDepth * 15)}%`;
+          },
+
+          goToNode(nodeId, { pushHistory = true, adjustProgress = true } = {}) {
+              if (!tree[nodeId]) return;
+
+              if (pushHistory && state.currentNode !== nodeId) {
+                  state.history.push({ nodeId: state.currentNode, timestamp: Date.now() });
+              }
+
+              state.currentNode = nodeId;
+
+              if (adjustProgress) {
+                  state.callDepth = Math.max(0, state.callDepth + 1);
+                  this.updateProgress();
+              }
+
+              this.render(nodeId, { adjustProgress: false, renderHistory: true });
+          },
+
+          jumpTo(nodeId) {
+              const input = document.getElementById('search-input');
+              const results = document.getElementById('search-results');
+              if (input) input.value = '';
+              if (results) results.classList.add('hidden');
+              this.goToNode(nodeId, { pushHistory: true, adjustProgress: true });
+          },
+
+          stepBack() {
+              if (state.history.length === 0) {
+                  this.syncBackButtons();
+                  return;
+              }
+
+              const prev = state.history.pop();
+              state.currentNode = prev.nodeId;
+              state.callDepth = Math.max(0, state.callDepth - 1);
+              this.updateProgress();
+              this.render(state.currentNode, { adjustProgress: false, renderHistory: true });
+          },
+
+          syncBackButtons() {
+              const disabled = state.history.length === 0;
+              const btnBack = document.getElementById('btn-back');
+              const btnBackTop = document.getElementById('btn-back-top');
+              if (btnBack) btnBack.disabled = disabled;
+              if (btnBackTop) btnBackTop.disabled = disabled;
+          },
+
+          quickPhrase(phrase) {
+              document.getElementById('me-text').innerText = phrase;
+              document.getElementById('tip-goal').innerText = "Rychlá záchrana situace.";
+              document.getElementById('tip-tone').innerText = "Klidný, upřímný, nevtíravý.";
+              document.getElementById('tip-why').innerText = "Univerzální fráze, která sníží tlak a ukáže, že respektujete klienta.";
+              document.getElementById('tip-avoid').innerText = "Nedělejte dlouhé pauzy. Řekněte to sebevědomě.";
+
+              const meBox = document.getElementById('me-text').parentElement;
+              meBox.classList.remove('fade-enter-active');
+              void meBox.offsetWidth;
+              meBox.classList.add('fade-enter', 'fade-enter-active');
+          },
+
+          endPolitely() {
+              this.quickPhrase("Rozumím, nebudu vás dál zdržovat. Díky za váš čas a ať se daří. Na slyšenou.");
+              document.getElementById('options-container').innerHTML = `
+                  <button onclick="app.restart()" class="w-full text-left p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50 hover:bg-zinc-800 transition-all duration-200 flex items-center justify-between group">
+                      <span class="text-sm md:text-base font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">[Zapsat a další hovor]</span>
+                      <iconify-icon icon="solar:alt-arrow-right-linear" class="text-emerald-400 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></iconify-icon>
+                  </button>
+              `;
+          },
+
+          restart() {
+              state.history = [];
+              state.callDepth = 0;
+              state.currentNode = 'start';
+              state.notes = '';
+              const notes = document.getElementById('notes-input');
+              if (notes) notes.value = '';
+              this.updateProgress();
+              this.render('start', { adjustProgress: false, renderHistory: true });
+          },
+
+          goToHistory(nodeId, index) {
+              if (!tree[nodeId]) return;
+              // keep items up to index-1 (so current becomes that node)
+              state.history = state.history.slice(0, Math.max(0, index));
+              state.currentNode = nodeId;
+              state.callDepth = Math.min(state.callDepth, state.history.length);
+              this.updateProgress();
+              this.render(nodeId, { adjustProgress: false, renderHistory: true });
+          },
+
+          renderHistory() {
+              const histContainer = document.getElementById('history-container');
+              if (!histContainer) return;
+
+              const path = [...state.history.map(h => h.nodeId), state.currentNode];
+
+              if (path.length <= 1) {
+                  histContainer.innerHTML = '<div class="text-xs text-zinc-600 italic">Zatím žádná historie...</div>';
+                  return;
+              }
+
+              histContainer.innerHTML = path.map((id, idx) => {
+                  const node = tree[id];
+                  const isCurrent = id === state.currentNode && idx === path.length - 1;
+                  const clientLine = (node?.client_text || '').replace(/\s+/g, ' ').trim();
+                  const meLine = (node?.me_text || '').replace(/\s+/g, ' ').trim();
+                  const meShort = meLine.length > 90 ? (meLine.slice(0, 90) + '…') : meLine;
+
+                  const wrapClass = isCurrent
+                      ? 'border-emerald-500/30 bg-emerald-500/5'
+                      : 'border-zinc-800/40 bg-zinc-900/20 hover:bg-zinc-900/40';
+
+                  return `
+                      <button onclick="app.goToHistory('${id}', ${idx})" class="w-full text-left p-3 rounded-xl border ${wrapClass} transition-colors">
+                          <div class="flex items-start gap-2">
+                              <span class="text-xs text-zinc-600 mt-0.5">${idx}.</span>
+                              <div class="min-w-0">
+                                  <div class="text-xs text-zinc-300 truncate">${clientLine || '—'}</div>
+                                  <div class="text-[11px] text-zinc-500 truncate">Já: ${meShort || '—'}</div>
+                              </div>
+                          </div>
+                      </button>
+                  `;
+              }).join('');
+              histContainer.scrollTop = histContainer.scrollHeight;
+          },
+
+          render(nodeId, { renderHistory = true } = {}) {
+              const node = tree[nodeId];
+              if (!node) return;
+
+              const statusBadge = document.getElementById('call-status-badge');
+              if (statusBadge) {
+                  statusBadge.innerText = node.status || "Otevřeno";
+                  statusBadge.className = `px-2.5 py-1 rounded-md text-xs font-medium transition-colors border ${statusColors[node.status] || statusColors["Otevřeno"]}`;
+              }
+
+              this.syncBackButtons();
+
+              if (renderHistory) this.renderHistory();
+
+              const mainContainers = [document.getElementById('client-box'), document.getElementById('me-text').parentElement];
+              mainContainers.forEach(el => {
+                  el.classList.remove('fade-enter-active');
+                  void el.offsetWidth;
+                  el.classList.add('fade-enter', 'fade-enter-active');
+              });
+
+              const cBox = document.getElementById('client-box');
+              const cText = document.getElementById('client-text');
+              const sDot = document.getElementById('sentiment-dot');
+
+              cText.innerText = node.client_text;
+              cBox.className = 'relative p-6 rounded-2xl border transition-all duration-500';
+              const style = colors[node.sentiment] || colors.neutral;
+              cBox.classList.add(style.boxBg, style.border);
+              sDot.className = `w-2 h-2 rounded-full ${style.bg} animate-pulse`;
+
+              document.getElementById('me-text').innerText = node.me_text;
+              document.getElementById('tip-goal').innerText = node.tips.goal;
+              document.getElementById('tip-tone').innerText = node.tips.tone;
+              document.getElementById('tip-why').innerText = node.tips.why;
+              document.getElementById('tip-avoid').innerText = node.tips.avoid;
+
+              const optsContainer = document.getElementById('options-container');
+              optsContainer.innerHTML = '';
+
+              node.options.forEach((opt, index) => {
+                  const btn = document.createElement('button');
+                  const optStyle = colors[opt.type] || colors.neutral;
+
+                  btn.className = `w-full text-left p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50 hover:bg-zinc-800 transition-all duration-200 flex items-center justify-between group fade-enter fade-enter-active`;
+                  btn.style.animationDelay = `${index * 50}ms`;
+
+                  btn.innerHTML = `
+                      <span class="text-sm md:text-base font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">${opt.text}</span>
+                      <iconify-icon icon="solar:alt-arrow-right-linear" class="${optStyle.text} opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></iconify-icon>
+                  `;
+
+                  btn.onclick = () => this.goToNode(opt.id, { pushHistory: true, adjustProgress: true });
+                  optsContainer.appendChild(btn);
+              });
+          }
+      };
+
+      document.addEventListener('DOMContentLoaded', () => {
+          app.init();
+      });
+    </script>
+
+    <div id="panic-modal" class="fixed inset-0 z-[80] hidden">
+      <div class="absolute inset-0 bg-zinc-950/70 backdrop-blur-sm"></div>
+      <div class="relative h-full w-full flex items-center justify-center p-4">
+        <div class="w-full max-w-lg rounded-2xl border border-zinc-800/60 bg-zinc-950 shadow-2xl overflow-hidden">
+          <div class="p-4 md:p-5 border-b border-zinc-800/60 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-zinc-200">
+              <iconify-icon icon="solar:shield-warning-linear" class="text-rose-400"></iconify-icon>
+              <div>
+                <div class="text-sm font-medium tracking-tight">Panic Mode</div>
+                <div class="text-xs text-zinc-500">
+                  Vyberte krátkou krizovou větu
+                </div>
+              </div>
+            </div>
+            <button onclick="app.closePanic()" class="text-zinc-500 hover:text-zinc-200 transition-colors" aria-label="Zavřít">
+              <iconify-icon icon="solar:close-circle-linear" class="text-lg"></iconify-icon>
+            </button>
+          </div>
+          <div class="p-4 md:p-5 flex flex-col gap-2">
+            <button onclick="app.usePanicPhrase('Rozumím, nebudu vás zdržovat.')" class="w-full text-left p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50 hover:bg-zinc-800 transition-all duration-200 flex items-center justify-between group">
+              <span class="text-sm md:text-base font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+                Rozumím, nebudu vás zdržovat.
+              </span>
+              <iconify-icon icon="solar:alt-arrow-right-linear" class="text-rose-400 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></iconify-icon>
+            </button>
+            <button onclick="app.usePanicPhrase('Můžu se zeptat jen na jednu poslední věc?')" class="w-full text-left p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50 hover:bg-zinc-800 transition-all duration-200 flex items-center justify-between group">
+              <span class="text-sm md:text-base font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+                Můžu se zeptat jen na jednu poslední věc?
+              </span>
+              <iconify-icon icon="solar:alt-arrow-right-linear" class="text-rose-400 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></iconify-icon>
+            </button>
+            <button onclick="app.usePanicPhrase('Nechci tlačit, spíš zjišťuju, jestli je to vůbec téma.')" class="w-full text-left p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50 hover:bg-zinc-800 transition-all duration-200 flex items-center justify-between group">
+              <span class="text-sm md:text-base font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+                Nechci tlačit, spíš zjišťuju, jestli je to vůbec téma.
+              </span>
+              <iconify-icon icon="solar:alt-arrow-right-linear" class="text-rose-400 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></iconify-icon>
+            </button>
+            <button onclick="app.usePanicPhrase('Mám vám radši poslat krátkou ukázku do mailu?')" class="w-full text-left p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50 hover:bg-zinc-800 transition-all duration-200 flex items-center justify-between group">
+              <span class="text-sm md:text-base font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+                Mám vám radši poslat krátkou ukázku do mailu?
+              </span>
+              <iconify-icon icon="solar:alt-arrow-right-linear" class="text-rose-400 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></iconify-icon>
+            </button>
+            <button onclick="app.usePanicPhrase('V pořádku, díky za váš čas a přeju hezký den.')" class="w-full text-left p-4 rounded-xl border border-zinc-800/60 bg-zinc-900/50 hover:bg-zinc-800 transition-all duration-200 flex items-center justify-between group">
+              <span class="text-sm md:text-base font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
+                V pořádku, díky za váš čas a přeju hezký den.
+              </span>
+              <iconify-icon icon="solar:alt-arrow-right-linear" class="text-rose-400 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></iconify-icon>
+            </button>
+          </div>
+          <div class="p-4 md:p-5 border-t border-zinc-800/60 flex items-center justify-end">
+            <button onclick="app.closePanic()" class="px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 rounded-xl text-sm font-medium text-zinc-300 transition-colors">
+              Zavřít
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+</body></html>
